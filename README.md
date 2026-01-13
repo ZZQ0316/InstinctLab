@@ -58,7 +58,7 @@ See [CONTRIBUTORS.md](CONTRIBUTORS.md) for a list of acknowledged contributors.
     python -m pip install -e source/instinctlab
     ```
 
-- To run with `instinct-rl`, you can use the following command after installing [instinct-rl](https://github.com/ziwenzhuang/instinct_rl):
+- To run with `instinct-rl`, you can use the following command after installing [instinct-rl](https://github.com/project-instinct/instinct_rl):
 
     ```bash
     python scripts/instinct_rl/train.py --task=Instinct-Shadowing-WholeBody-Plane-G1-Play-v0 --headless
