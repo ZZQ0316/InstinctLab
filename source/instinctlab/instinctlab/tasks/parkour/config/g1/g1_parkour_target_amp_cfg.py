@@ -17,7 +17,7 @@ from instinctlab.motion_reference import MotionReferenceManagerCfg
 from instinctlab.motion_reference.motion_files.amass_motion_cfg import AmassMotionCfg as AmassMotionCfgBase
 from instinctlab.motion_reference.utils import motion_interpolate_bilinear
 from instinctlab.sensors import get_link_prim_targets
-from instinctlab.tasks.parkour.config.parkour_env_cfg import ROUGH_TERRAINS_CFG, ParkourEnvCfg
+from instinctlab.tasks.parkour.config.parkour_env_cfg import ROUGH_TERRAINS_CFG, ROUGH_TERRAINS_CFG_PLAY, ParkourEnvCfg
 
 __file_dir__ = os.path.dirname(os.path.realpath(__file__))
 G1_CFG = copy.deepcopy(G1_29DOF_TORSOBASE_POPSICLE_CFG)
@@ -31,9 +31,9 @@ G1_with_shoe_CFG.spawn.asset_path = os.path.abspath(
 
 @configclass
 class AmassMotionCfg(AmassMotionCfgBase):
-    path = os.path.expanduser("~/Datasets")
+    path = os.path.expanduser("~/zzq/Instinct/data_model/parkour_motion_reference")
     retargetting_func = None
-    filtered_motion_selection_filepath = os.path.expanduser("~/Datasets/parkour_motion_without_run.yaml")
+    filtered_motion_selection_filepath = os.path.expanduser("~/zzq/Instinct/data_model/parkour_motion_reference/parkour_motion_without_run.yaml")
     motion_start_from_middle_range = [0.0, 0.9]
     motion_start_height_offset = 0.0
     ensure_link_below_zero_ground = False
@@ -75,11 +75,6 @@ motion_reference_cfg = MotionReferenceManagerCfg(
 )
 
 
-ROUGH_TERRAINS_CFG_PLAY = copy.deepcopy(ROUGH_TERRAINS_CFG)
-for sub_terrain_name, sub_terrain_cfg in ROUGH_TERRAINS_CFG_PLAY.sub_terrains.items():
-    sub_terrain_cfg.wall_prob = [0.0, 0.0, 0.0, 0.0]
-
-
 @configclass
 class G1ParkourRoughEnvCfg(ParkourEnvCfg):
     def __post_init__(self):
@@ -108,22 +103,24 @@ class G1ParkourRoughEnvCfg_PLAY(G1ParkourRoughEnvCfg):
         super().__post_init__()
         self.scene.terrain.terrain_generator = ROUGH_TERRAINS_CFG_PLAY
         # make a smaller scene for play
-        self.scene.num_envs = 10
+        self.scene.num_envs = 1
         self.viewer = ViewerCfg(
             eye=[4.0, 0.75, 1.0],
             lookat=[0.0, 0.75, 0.0],
-            origin_type="asset_root",
-            asset_name="robot",
+            origin_type = "world"
+            # origin_type="asset_root",
+            # asset_name="robot",
         )
 
         self.scene.env_spacing = 2.5
         self.episode_length_s = 10
         self.terminations.root_height = None
-        # spawn the robot randomly in the grid (instead of their terrain levels)
-        # reduce the number of terrains to save memory
-        if self.scene.terrain.terrain_generator is not None:
-            self.scene.terrain.terrain_generator.num_rows = 4
-            self.scene.terrain.terrain_generator.num_cols = 10
+
+        self.commands.base_velocity.random_velocity_terrain = []
+        self.commands.base_velocity.velocity_ranges = {
+            "pyramid_stairs": {"lin_vel_x": (0.45, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
+            "pyramid_stairs_inv": {"lin_vel_x": (0.45, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
+        }
 
         self.scene.leg_volume_points.debug_vis = True
         self.commands.base_velocity.debug_vis = True

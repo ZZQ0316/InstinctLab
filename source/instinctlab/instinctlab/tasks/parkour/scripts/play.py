@@ -34,7 +34,7 @@ parser.add_argument("--agent_cfg", action="store_true", default=False, help="Loa
 parser.add_argument("--sample", action="store_true", default=False, help="Sample actions instead of using the policy.")
 parser.add_argument("--zero_act_until", type=int, default=0, help="Zero actions until this timestep.")
 parser.add_argument("--keyboard_control", action="store_true", default=False, help="Enable keyboard control.")
-parser.add_argument("--keyboard_linvel_step", type=float, default=0.5, help="Linear velocity change per keyboard step.")
+parser.add_argument("--keyboard_linvel_step", type=float, default=0.1, help="Linear velocity change per keyboard step.")
 parser.add_argument("--keyboard_angvel", type=float, default=1.0, help="Angular velocity set by keyboard.")
 
 # append Instinct-RL cli arguments
@@ -98,12 +98,22 @@ def main():
     if agent_cfg.load_run is not None:
         print(f"[INFO] Loading experiment from directory: {log_root_path}")
         if os.path.isabs(agent_cfg.load_run):
-            resume_path = get_checkpoint_path(
-                os.path.dirname(agent_cfg.load_run), os.path.basename(agent_cfg.load_run), agent_cfg.load_checkpoint
-            )
+            try:
+                resume_path = get_checkpoint_path(
+                    os.path.dirname(agent_cfg.load_run), os.path.basename(agent_cfg.load_run), agent_cfg.load_checkpoint
+                )
+                log_dir = os.path.dirname(resume_path)
+            except ValueError as e:
+                if args_cli.useonnx:
+                    print(f"[INFO] No .pt checkpoint found: {e}")
+                    print(f"[INFO] Using directory directly for ONNX model: {agent_cfg.load_run}")
+                    log_dir = agent_cfg.load_run
+                    resume_path = None
+                else:
+                    raise
         else:
             resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
-        log_dir = os.path.dirname(resume_path)
+            log_dir = os.path.dirname(resume_path)
     elif not args_cli.no_resume:
         raise RuntimeError(
             f"\033[91m[ERROR] No checkpoint specified and play.py resumes from a checkpoint by default. Please specify"
@@ -149,7 +159,7 @@ def main():
 
     # load previously trained model
     ppo_runner = OnPolicyRunner(env, agent_cfg_dict, log_dir=None, device=agent_cfg.device)
-    if agent_cfg.load_run is not None:
+    if agent_cfg.load_run is not None and resume_path is not None:
         print(f"[INFO]: Loading model checkpoint from: {resume_path}")
         ppo_runner.load(resume_path)
 
@@ -207,6 +217,9 @@ def main():
         if e.input == carb.input.KeyboardInput.W:
             if e.type == KeyboardEventType.KEY_PRESS or e.type == KeyboardEventType.KEY_REPEAT:
                 override_command[:, 0] += args_cli.keyboard_linvel_step
+        if e.input == carb.input.KeyboardInput.Q:
+            if e.type == KeyboardEventType.KEY_PRESS or e.type == KeyboardEventType.KEY_REPEAT:
+                override_command[:, 0] -= args_cli.keyboard_linvel_step
         if e.input == carb.input.KeyboardInput.S:
             if e.type == KeyboardEventType.KEY_PRESS or e.type == KeyboardEventType.KEY_REPEAT:
                 override_command[:, 2] = 0.0
@@ -235,16 +248,19 @@ def main():
             # agent stepping
             if args_cli.keyboard_control:
                 obs[:, command_obs_slice[0]] = override_command.repeat(1, command_obs_slice[1][0] // 3)
-            actions = policy(obs)
             if args_cli.useonnx:
-                torch_actions = actions
                 actions = onnx_policy(obs)
-                if (actions - torch_actions).abs().max() > 1e-5:
-                    print(
-                        "[INFO]: ONNX model and PyTorch model have a difference of"
-                        f" {(actions - torch_actions).abs().max()} in actions at joint"
-                        f" {((actions - torch_actions).abs() > 1e-5).nonzero(as_tuple=True)[0]}"
-                    )
+                # Only compare if we loaded a PyTorch checkpoint
+                if resume_path is not None:
+                    torch_actions = policy(obs)
+                    if (actions - torch_actions).abs().max() > 1e-5:
+                        print(
+                            "[INFO]: ONNX model and PyTorch model have a difference of"
+                            f" {(actions - torch_actions).abs().max()} in actions at joint"
+                            f" {((actions - torch_actions).abs() > 1e-5).nonzero(as_tuple=True)[0]}"
+                        )
+            else:
+                actions = policy(obs)
             if timestep < args_cli.zero_act_until:
                 actions[:] = 0.0
             # env stepping
