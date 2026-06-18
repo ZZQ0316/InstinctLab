@@ -65,12 +65,59 @@ class EdgeCylinder(VirtualObstacleBase):
             # get the corresponding edges (vertex index pairs)
             # face_adjacency_edges is (n_adj, 2) vertex indices for each adjacency
             sharp_edges = mesh.face_adjacency_edges[sharp_mask]
+            # 每条边缘相邻的两个面的索引
+            sharp_adj_faces = mesh.face_adjacency[sharp_mask]
+
+            # 只在台阶前沿设置虚拟障碍，根本不设置，即可以踢内壁，但不可以踩边缘
+            if getattr(self.cfg, "convex_edges_only", False):
+                convex_mask = mesh.face_adjacency_convex[sharp_mask]
+                sharp_edges = sharp_edges[convex_mask]
+                sharp_adj_faces = sharp_adj_faces[convex_mask]
 
             # look up vertex coordinates
             v = mesh.vertices
             # build (num_edges, 6) array: [x0,y0,z0, x1,y1,z1]
-            # build the (num_edges, 6) array of sharp edge end‐point coordinates
             edge_coords = np.hstack([v[sharp_edges[:, 0]], v[sharp_edges[:, 1]]])
+
+            # Offset edges towards exterior if configured
+            offset_dist = getattr(self.cfg, "edge_offset_distance", 0.0)
+            if offset_dist > 0:
+                face_normals = mesh.face_normals
+                # 法向量 Z 分量 > 0.5 的认为是水平面（台阶面），否则是垂直面（台阶立面）
+                z_thresh = getattr(self.cfg, "edge_offset_z_threshold", 0.5)
+                # normals_a/b[i] 是第 i 条边缘相邻的面A/B的法向量（长度为 3，表示方向）。
+                normals_a = face_normals[sharp_adj_faces[:, 0]]
+                normals_b = face_normals[sharp_adj_faces[:, 1]]
+
+                # For each edge, determine offset direction
+                num_edges = edge_coords.shape[0]
+                edge_offsets = np.zeros((num_edges, 3), dtype=np.float32)
+
+                up_offset = getattr(self.cfg, "edge_offset_up", 0.0)
+                for i in range(num_edges):
+                    na = normals_a[i]
+                    nb = normals_b[i]
+                    # Determine which face is horizontal (tread) and which is vertical (rise)
+                    is_horiz_a = abs(na[2]) > z_thresh
+                    is_horiz_b = abs(nb[2]) > z_thresh
+                    # Only offset if one face is horizontal and one is vertical (rise-tread junction)
+                    if is_horiz_a != is_horiz_b:
+                        # Take the vertical (rise) face normal
+                        rise_normal = nb if is_horiz_a else na
+                        # Offset direction is same as rise normal (towards exterior)
+                        # Take only horizontal (x,y) component, normalize
+                        # 台阶立面是垂直的，它的法向量完全是水平的（z=0），所以取水平分量就是取法向量本身。
+                        offset_dir = np.array([rise_normal[0], rise_normal[1], 0.0], dtype=np.float32)
+                        offset_len = np.linalg.norm(offset_dir[:2])
+                        if offset_len > 1e-6:
+                            offset_dir[:2] /= offset_len
+                            edge_offsets[i] = offset_dir * offset_dist # 水平方向偏移
+                            edge_offsets[i, 2] = up_offset # 垂直方向偏移
+
+                # Apply offsets to both start and end points of each edge
+                edge_coords[:, :3] += edge_offsets
+                edge_coords[:, 3:] += edge_offsets
+
             edge_end_points = self.process_edges(edge_coords)
             print(f"Detected {edge_end_points.shape[0]} edges after processing.")
         self.device = device if isinstance(device, torch.device) else torch.device(device)

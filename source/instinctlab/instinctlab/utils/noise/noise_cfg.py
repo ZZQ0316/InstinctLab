@@ -20,6 +20,12 @@ from .noise_model import (
     random_gaussian_noise,
     range_based_gaussian_noise,
     stereo_too_close_noise,
+
+    perlin_noise,
+    pixel_failure_noise,
+    random_conv_noise,
+    scale_randomization_noise,
+    stereo_fusion_noise,
 )
 
 
@@ -249,3 +255,66 @@ class SensorDeadNoiseCfg(ImageNoiseCfg):
     """
 
     func = SensorDeadNoiseModel
+
+@configclass
+class StereoFusionNoiseCfg(ImageNoiseCfg):
+    """Configuration for stereo fusion consistency-check hole simulation."""
+
+    apply_probability: float = 0.5
+    disparity_grad_threshold: float = 0.08
+    texture_var_threshold: float = 0.0005
+    hole_probability: float = 0.08
+    hole_kernel_size: int = 3
+    hole_value: float = 0.0
+
+    func = stereo_fusion_noise
+
+
+@configclass
+class RandomConvNoiseCfg(ImageNoiseCfg):
+    """Configuration for random 3x3 convolution distortion."""
+
+    apply_probability: float = 0.5
+    kernel_std: float = 0.12
+    center_weight: float = 1.0
+
+    func = random_conv_noise
+
+
+@configclass
+class PerlinNoiseCfg(ImageNoiseCfg):
+    """Configuration for multi-octave spatially-correlated Perlin-style noise."""
+
+    apply_probability: float = 0.5
+    octaves: int = 4
+    base_frequency: float = 8.0
+    lacunarity: float = 2.0
+    persistence: float = 0.5
+    amplitude: float = 1.0
+    noise_std: float = 0.02
+
+    func = perlin_noise
+
+
+@configclass
+class ScaleRandomizationNoiseCfg(ImageNoiseCfg):
+    """Configuration for random depth scale perturbation."""
+
+    apply_probability: float = 1.0
+    scale_min: float = 0.90
+    scale_max: float = 1.10
+
+    func = scale_randomization_noise
+
+
+@configclass
+class PixelFailureNoiseCfg(ImageNoiseCfg):
+    """Configuration for dead/saturated pixel simulation."""
+
+    apply_probability: float = 0.7
+    dead_pixel_prob: float = 0.001
+    saturated_pixel_prob: float = 0.001
+    dead_value: float = 0.0
+    saturated_value: float = 1.0
+
+    func = pixel_failure_noise

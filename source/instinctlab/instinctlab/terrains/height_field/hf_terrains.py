@@ -158,12 +158,22 @@ def perlin_pyramid_stairs_terrain(difficulty: float, cfg: hf_terrains_cfg.Perlin
     step_height = cfg.step_height_range[0] + difficulty * (cfg.step_height_range[1] - cfg.step_height_range[0])
     if cfg.inverted:
         step_height *= -1
+    if cfg.step_width_choices is not None:
+        step_width = np.random.choice(cfg.step_width_choices)
+    elif cfg.step_width_range is not None:
+        min_step_width, max_step_width = cfg.step_width_range
+        min_step_width = round(min_step_width * 100)
+        max_step_width = round(max_step_width * 100)
+        step_width = np.random.randint(min_step_width, max_step_width + 1) / 100.0
+    else:
+        step_width = cfg.step_width
+
     # switch parameters to discrete units
     # -- terrain
     width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
     length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
     # -- stairs
-    step_width = round(cfg.step_width / cfg.horizontal_scale)
+    step_width = round(step_width / cfg.horizontal_scale)
     step_height = round(step_height / cfg.vertical_scale)
     # -- platform
     platform_width = round(cfg.platform_width / cfg.horizontal_scale)

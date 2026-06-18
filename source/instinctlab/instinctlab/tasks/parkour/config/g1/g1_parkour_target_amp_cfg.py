@@ -132,14 +132,10 @@ class G1ParkourRoughEnvCfg_PLAY(G1ParkourRoughEnvCfg):
 
 
 @configclass
-class G1ParkourEnvCfg(G1ParkourRoughEnvCfg, ShoeConfigMixin):
-    def __post_init__(self):
-        super().__post_init__()
-        self.apply_shoe_config()
+class G1ParkourEnvCfg(G1ParkourRoughEnvCfg):
+    pass
 
 
 @configclass
-class G1ParkourEnvCfg_PLAY(G1ParkourRoughEnvCfg_PLAY, ShoeConfigMixin):
-    def __post_init__(self):
-        super().__post_init__()
-        self.apply_shoe_config()
+class G1ParkourEnvCfg_PLAY(G1ParkourRoughEnvCfg_PLAY):
+    pass

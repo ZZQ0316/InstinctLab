@@ -11,11 +11,12 @@
 # pip install -e /home/tcict/zzq/Instinct/InstinctLab_backup/source/instinctlab --no-deps -q
 python source/instinctlab/instinctlab/tasks/parkour/scripts/play.py \
     --task=Instinct-Parkour-Target-Amp-G1-Play-v0 \
-    --load_run=/home/tcict/zzq/Instinct/InstinctLab/logs/instinct_rl/g1_parkour/20260514_225303 \
-    --checkpoint model_25000.pt \
+    --load_run=/home/tcict/zzq/Instinct/InstinctLab/logs/instinct_rl/g1_parkour/20260615_221504_from20260605_110544 \
+    --checkpoint model_40500.pt \
     --num_envs=1 \
     --keyboard_control \
     --useonnx
+# 开启keyboard控制后，num_envs只能为1,且无法使用onnx导出模型
 
 # python source/instinctlab/instinctlab/tasks/parkour/scripts/play.py \
 #     --task=Instinct-Parkour-Stairs-Finetune-G1-v0 \

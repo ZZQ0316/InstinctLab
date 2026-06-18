@@ -171,3 +171,27 @@ def link_orientation(env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEn
     link_projected_gravity = quat_apply_inverse(link_quat, asset.data.GRAVITY_VEC_W)
 
     return torch.sum(torch.square(link_projected_gravity[:, :2]), dim=1)
+
+# 从github上找的一个二阶动作平滑的奖励函数，鼓励动作加速度小，适合需要平滑动作的任务，比如跑酷。
+def action_acc_l2(
+    env: ManagerBasedRLEnv,
+    action_ids: Sequence[int] | None = None,
+) -> torch.Tensor:
+    """Second-order action smoothness (action acceleration penalty).
+    
+    Penalizes: -∑ⱼ(aⱼ,ₜ − 2aⱼ,ₜ₋₁ + aⱼ,ₜ₋₂)²
+    """
+    action = env.action_manager.action
+    if action_ids is not None:
+        action = action[:, action_ids]
+    # Compute the second-order finite difference (acceleration)
+    if not hasattr(env, "_last_action"):
+        env._last_action = torch.zeros_like(action)
+        env._last_last_action = torch.zeros_like(action)
+    action_acc = action - 2 * env._last_action + env._last_last_action
+    # Update the last actions
+    env._last_last_action[:] = env._last_action
+    env._last_action[:] = action
+    # Compute the L2 penalty
+    action_acc_l2 = torch.sum(torch.square(action_acc), dim=-1)  # (batch_size,)
+    return action_acc_l2

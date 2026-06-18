@@ -51,12 +51,18 @@ class PerlinInvertedPyramidSlopedTerrainCfg(HfInvertedPyramidSlopedTerrainCfg, W
 @configclass
 class PerlinPyramidStairsTerrainCfg(HfPyramidStairsTerrainCfg, WallTerrainCfgMixin):
     function = hf_terrains.perlin_pyramid_stairs_terrain
+    step_width: float = 0.0
+    step_width_range: tuple[float, float] | None = None
+    step_width_choices: list[float] | None = None
     perlin_cfg: PerlinPlaneTerrainCfg | None = None
 
 
 @configclass
 class PerlinInvertedPyramidStairsTerrainCfg(HfInvertedPyramidStairsTerrainCfg, WallTerrainCfgMixin):
     function = hf_terrains.perlin_pyramid_stairs_terrain
+    step_width: float = 0.0
+    step_width_range: tuple[float, float] | None = None
+    step_width_choices: list[float] | None = None
     perlin_cfg: PerlinPlaneTerrainCfg | None = None
 
 

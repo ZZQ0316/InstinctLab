@@ -35,6 +35,12 @@ from instinctlab.utils.noise import (
     GaussianBlurNoiseCfg,
     RandomGaussianNoiseCfg,
     RangeBasedGaussianNoiseCfg,
+
+    PerlinNoiseCfg,
+    PixelFailureNoiseCfg,
+    RandomConvNoiseCfg,
+    ScaleRandomizationNoiseCfg,
+    StereoFusionNoiseCfg,
 )
 
 __file_dir__ = os.path.dirname(os.path.realpath(__file__))
@@ -50,7 +56,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
     num_cols=20,
     horizontal_scale=0.05,
     vertical_scale=0.005,
-    slope_threshold=0.8, # 避免低台阶变成斜坡（应该是这样）
+    slope_threshold=0.8,
     use_cache=False,
     curriculum=True,
     sub_terrains={
@@ -108,7 +114,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
             },
         ),
         "pyramid_stairs": terrain_gen.PerlinPyramidStairsTerrainCfg(
-            proportion=0.3,
+            proportion=0.4,
             step_height_range=(0.05, 0.23),
             step_width_choices=[0.21, 0.27, 0.30],
             platform_width=2.5,
@@ -117,7 +123,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
             wall_height=5.0,
             wall_thickness=0.05,
             perlin_cfg=terrain_gen.PerlinPlaneTerrainCfg(
-                noise_scale=0.0,
+                noise_scale=0.03,
                 noise_frequency=20,
                 fractal_octaves=2,
                 fractal_lacunarity=2.0,
@@ -162,7 +168,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
             },
         ),
         "pyramid_stairs_inv": terrain_gen.PerlinInvertedPyramidStairsTerrainCfg(
-            proportion=0.3,
+            proportion=0.35,
             step_height_range=(0.05, 0.23),
             step_width_choices=[0.21, 0.27, 0.30],
             platform_width=2.5,
@@ -171,7 +177,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
             wall_height=5.0,
             wall_thickness=0.05,
             perlin_cfg=terrain_gen.PerlinPlaneTerrainCfg(
-                noise_scale=0.0,
+                noise_scale=0.03,
                 noise_frequency=20,
                 fractal_octaves=2,
                 fractal_lacunarity=2.0,
@@ -216,18 +222,18 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
             },
         ),
         "boxes": terrain_gen.PerlinDiscreteObstaclesTerrainCfg(
-            proportion=0.2,
+            proportion=0.0,
             num_obstacles=20,
             obstacle_height_mode="fixed",
-            obstacle_width_range=(0.4, 1.5),
-            obstacle_height_range=(0.05, 0.23),
+            obstacle_width_range=(0.8, 1.5),
+            obstacle_height_range=(0.05, 0.45),
             platform_width=1.5,
             border_width=0.0,
             wall_prob=[0.3, 0.3, 0.3, 0.3],
             wall_height=5.0,
             wall_thickness=0.05,
             perlin_cfg=terrain_gen.PerlinPlaneTerrainCfg(
-                noise_scale=0.0,
+                noise_scale=0.05,
                 noise_frequency=20,
                 fractal_octaves=2,
                 fractal_lacunarity=2.0,
@@ -259,8 +265,8 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
             },
         ),
         "hf_pyramid_slope_inv": terrain_gen.PerlinInvertedPyramidSlopedTerrainCfg(
-            proportion=0.05,
-            slope_range=(0.0, 0.3), # 太抖的斜坡没必要
+            proportion=0.10,
+            slope_range=(0.0, 0.7),
             platform_width=1.5,
             border_width=1.0,
             wall_prob=[0.3, 0.3, 0.3, 0.3],
@@ -287,61 +293,14 @@ ROUGH_TERRAINS_CFG_PLAY = TerrainGeneratorCfg(
     seed=0,
     size=(8.0, 8.0),
     border_width=3,
-    num_rows=1,
-    num_cols=1,
+    num_rows=2,
+    num_cols=2,
     horizontal_scale=0.05,
     vertical_scale=0.005,
     slope_threshold=0.8,
     use_cache=False,
     curriculum=False,
     sub_terrains={
-        "hf_pyramid_slope_inv": terrain_gen.PerlinInvertedPyramidSlopedTerrainCfg(
-            proportion=1.0,
-            slope_range=(0.3, 0.3),
-            platform_width=1.5,
-            border_width=1.0,
-            wall_prob=[0.0, 0.0, 0.0, 0.0],
-            wall_height=5.0,
-            wall_thickness=0.05,
-            perlin_cfg=terrain_gen.PerlinPlaneTerrainCfg(
-                noise_scale=0.00,
-                noise_frequency=20,
-                fractal_octaves=2,
-                fractal_lacunarity=2.0,
-                fractal_gain=0.25,
-                centering=True,
-            ),
-            flat_patch_sampling={
-                "target": FlatPatchSamplingCfg(
-                    num_patches=50, patch_radius=[0.05, 0.10, 0.15, 0.20], max_height_diff=0.05
-                ),
-            },
-        ),
-        "boxes": terrain_gen.PerlinDiscreteObstaclesTerrainCfg(
-            proportion=0.0,
-            num_obstacles=20,
-            obstacle_height_mode="fixed",
-            obstacle_width_range=(0.8, 1.5),
-            obstacle_height_range=(0.05, 0.3),
-            platform_width=1.5,
-            border_width=0.0,
-            wall_prob=[0.0, 0.0, 0.0, 0.0],
-            wall_height=5.0,
-            wall_thickness=0.05,
-            perlin_cfg=terrain_gen.PerlinPlaneTerrainCfg(
-                noise_scale=0.05,
-                noise_frequency=20,
-                fractal_octaves=2,
-                fractal_lacunarity=2.0,
-                fractal_gain=0.25,
-                centering=True,
-            ),
-            flat_patch_sampling={
-                "target": FlatPatchSamplingCfg(
-                    num_patches=50, patch_radius=[0.05, 0.10, 0.15, 0.20], max_height_diff=0.05
-                ),
-            },
-        ),
         "pyramid_stairs": terrain_gen.PerlinPyramidStairsTerrainCfg(
             proportion=0.0,
             step_height_range=(0.05, 0.05),
@@ -371,7 +330,7 @@ ROUGH_TERRAINS_CFG_PLAY = TerrainGeneratorCfg(
         ),
         "pyramid_stairs_inv": terrain_gen.PerlinInvertedPyramidStairsTerrainCfg(
             proportion=0.0,
-            step_height_range=(0.05, 0.05),
+            step_height_range=(0.1, 0.1),
             step_width_range=(0.21, 0.21),
             platform_width=2.5,
             border_width=1.0,
@@ -393,6 +352,28 @@ ROUGH_TERRAINS_CFG_PLAY = TerrainGeneratorCfg(
                     max_height_diff=0.05,
                     x_range=(3.7, 3.7),
                     y_range=(-0.0, 0.0),
+                ),
+            },
+        ),
+        "hf_pyramid_slope_inv": terrain_gen.PerlinInvertedPyramidSlopedTerrainCfg(
+            proportion=0.10,
+            slope_range=(0.0, 0.7),
+            platform_width=1.5,
+            border_width=1.0,
+            wall_prob=[0.3, 0.3, 0.3, 0.3],
+            wall_height=5.0,
+            wall_thickness=0.05,
+            perlin_cfg=terrain_gen.PerlinPlaneTerrainCfg(
+                noise_scale=0.00,
+                noise_frequency=20,
+                fractal_octaves=2,
+                fractal_lacunarity=2.0,
+                fractal_gain=0.25,
+                centering=True,
+            ),
+            flat_patch_sampling={
+                "target": FlatPatchSamplingCfg(
+                    num_patches=50, patch_radius=[0.05, 0.10, 0.15, 0.20], max_height_diff=0.05
                 ),
             },
         ),
@@ -420,13 +401,13 @@ class SceneCfg(InteractiveSceneCfg):
             project_uvw=True,
             texture_scale=(0.25, 0.25),
         ),
-        debug_vis=True,
+        debug_vis=False,
         virtual_obstacles={
             "edges": GreedyconcatEdgeCylinderCfg(
                 cylinder_radius=0.05,
                 min_points=2,
-                edge_offset_distance=0.06,
-                edge_offset_up=0.04,
+                edge_offset_distance=0.05,
+                edge_offset_up=0.05,
                 convex_edges_only=True,
             ),
         },
@@ -503,6 +484,48 @@ class SceneCfg(InteractiveSceneCfg):
         min_distance=0.1,
         # noise
         noise_pipeline={
+            # 从另一个开源项目中拿来的
+            # 缩放随机化
+            "scale_randomization": ScaleRandomizationNoiseCfg(
+                apply_probability=0.5,
+                scale_min=0.97,
+                scale_max=1.03,
+            ),
+            # 立体融合噪声
+            "stereo_fusion": StereoFusionNoiseCfg(
+                apply_probability=0.4,
+                disparity_grad_threshold=0.10,
+                texture_var_threshold=3e-4,
+                hole_probability=0.02,
+                hole_kernel_size=1,
+                hole_value=2.5,  # treat holes as max-range (2.5 m) before normalization
+            ),
+            # 随机卷积噪声
+            "random_conv": RandomConvNoiseCfg(
+                apply_probability=0.3,
+                kernel_std=0.05,
+                center_weight=1.0,
+            ),
+            # Perlin噪声
+            "perlin_noise": PerlinNoiseCfg(
+                apply_probability=0.5,
+                octaves=3,
+                base_frequency=8.0,
+                lacunarity=2.0,
+                persistence=0.5,
+                amplitude=1.0,
+                noise_std=0.01,  # ~1 cm at 1 m, relative to 2.5 m range
+            ),
+            # 像素故障
+            "pixel_failures": PixelFailureNoiseCfg(
+                apply_probability=0.5,
+                dead_pixel_prob=5e-4,
+                saturated_pixel_prob=5e-4,
+                dead_value=0.0,
+                saturated_value=2.5,  # saturated = max-range before normalization
+            ),
+
+            # InstinctLab原来的
             "crop_and_resize": CropAndResizeCfg(crop_region=(18, 0, 16, 16)),
             "gaussian_blur": GaussianBlurNoiseCfg(kernel_size=3, sigma=1),
             "depth_normalization": DepthNormalizationCfg(
@@ -523,6 +546,15 @@ class SceneCfg(InteractiveSceneCfg):
     )
     motion_reference: MotionReferenceManagerCfg = MISSING
 
+    # sensors 新加的
+    height_scanner = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/torso_link",
+        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 5.0)),
+        ray_alignment="yaw",
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[2.0, 1.0]),
+        debug_vis=False,
+        mesh_prim_paths=["/World/ground"],
+    )
 
 @configclass
 class ObservationsCfg:
@@ -615,6 +647,15 @@ class ObservationsCfg:
                 "debug_vis": False,
             },
             noise=None,
+        )
+
+        # 新加的
+        height_scan = ObsTerm(
+            func=mdp.height_scan,
+            params={"sensor_cfg": SceneEntityCfg("height_scanner")},
+            clip=(-5.0, 5.0),
+            history_length=8,
+            flatten_history_dim=True,
         )
 
         def __post_init__(self):
@@ -744,23 +785,24 @@ class CommandsCfg:
         velocity_control_stiffness=2.0,
         heading_control_stiffness=2.0,
         rel_standing_envs=0.05,
+        # straight_target_prob=0.8, # 80% chance to force the target y to 0 for straight walking.
         ranges=mdp.PoseVelocityCommandCfg.Ranges(lin_vel_x=(0.0, 0.0), lin_vel_y=(0.0, 0.0), ang_vel_z=(-1.0, 1.0)),
         random_velocity_terrain=["perlin_rough_stand"],
         velocity_ranges={
-            "perlin_rough": {"lin_vel_x": (0.45, 1.0), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
+            "perlin_rough": {"lin_vel_x": (0.4, 1.0), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
             "perlin_rough_stand": {"lin_vel_x": (0.0, 0.0), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (0.0, 0.0)},
-            "square_gaps": {"lin_vel_x": (0.45, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
-            "pyramid_stairs": {"lin_vel_x": (0.45, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
-            "pyramid_stairs_high": {"lin_vel_x": (0.45, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
-            "pyramid_stairs_inv": {"lin_vel_x": (0.45, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
+            "square_gaps": {"lin_vel_x": (0.4, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
+            "pyramid_stairs": {"lin_vel_x": (0.4, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
+            "pyramid_stairs_high": {"lin_vel_x": (0.4, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
+            "pyramid_stairs_inv": {"lin_vel_x": (0.4, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
             "pyramid_stairs_inv_high": {
-                "lin_vel_x": (0.45, 0.8),
+                "lin_vel_x": (0.4, 0.8),
                 "lin_vel_y": (0.0, 0.0),
                 "ang_vel_z": (-1.0, 1.0),
             },
-            "boxes": {"lin_vel_x": (0.45, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
-            "mesh_boxes": {"lin_vel_x": (0.45, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
-            "hf_pyramid_slope_inv": {"lin_vel_x": (0.45, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
+            "boxes": {"lin_vel_x": (0.4, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
+            "mesh_boxes": {"lin_vel_x": (0.4, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
+            "hf_pyramid_slope_inv": {"lin_vel_x": (0.4, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
         },
         only_positive_lin_vel_x=True,
         lin_vel_threshold=0.0,
@@ -776,11 +818,11 @@ class G1Rewards:
     # Task rewards
     track_lin_vel_xy_exp = RewTerm(
         func=mdp.track_lin_vel_xy_exp,
-        weight=1.5,
+        weight=2.0,
         params={"command_name": "base_velocity", "std": 0.5},
     )
     track_ang_vel_z_exp = RewTerm(
-        func=mdp.track_ang_vel_z_exp, weight=1.5, params={"command_name": "base_velocity", "std": 0.5}
+        func=mdp.track_ang_vel_z_exp, weight=2.0, params={"command_name": "base_velocity", "std": 0.5}
     )
     heading_error = RewTerm(func=mdp.heading_error, weight=-1.0, params={"command_name": "base_velocity"})
     dont_wait = RewTerm(func=mdp.dont_wait, weight=-0.5, params={"command_name": "base_velocity"})
@@ -790,7 +832,7 @@ class G1Rewards:
     # Regularization rewards
     volume_points_penetration = RewTerm(
         func=mdp.volume_points_penetration,
-        weight=-5.0,
+        weight=-4.0,
         params={
             "sensor_cfg": SceneEntityCfg("leg_volume_points"),
         },
@@ -858,15 +900,15 @@ class G1Rewards:
             "height_offset": 0.035,
         },
     )
-    feet_close_xy = RewTerm(
-        func=mdp.feet_close_xy_gauss,
-        weight=0.4,
-        params={
-            "threshold": 0.12,
-            "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_roll_link"),
-            "std": math.sqrt(0.05),
-        },
-    )
+    # feet_close_xy = RewTerm(
+    #     func=mdp.feet_close_xy_gauss,
+    #     weight=0.4,
+    #     params={
+    #         "threshold": 0.12,
+    #         "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_roll_link"),
+    #         "std": math.sqrt(0.05),
+    #     },
+    # )
     energy = RewTerm(
         func=mdp.motors_power_square,
         weight=-5e-5,
@@ -910,6 +952,13 @@ class G1Rewards:
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names="(?!.*_ankle_roll_link).*"),
             "threshold": 1.0,
+        },
+    )
+    feet_stumble = RewTerm(
+        func=mdp.feet_stumble,
+        weight=-1.0,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=[".*_ankle_roll_link", ".*_knee_link"]),
         },
     )
 
@@ -995,13 +1044,86 @@ class EventCfg:
         },
     )
 
+    # reset_robot_joints=EventTerm(
+    #     func=mdp.reset_joints_by_scale,
+    #     mode="reset",
+    #     params={
+    #         "position_range": (0.8, 1.2),
+    #         "velocity_range": (0.0, 0.0),
+    #     },
+    # )
+ 
+    randomize_camera_offset = EventTerm(
+        func=mdp.randomize_camera_offsets,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("camera"),
+            "offset_pose_ranges": {
+                "x": (-0.03, 0.03),
+                "y": (-0.03, 0.03),
+                "z": (-0.03, 0.03),
+                "roll": (-math.radians(3), math.radians(3)),
+                "pitch": (-math.radians(3), math.radians(3)),
+                "yaw": (-math.radians(3), math.radians(3)),
+            },
+            "distribution": "uniform",
+        },
+    )
 
 @configclass
 class CurriculumCfg:
     """Curriculum terms for the MDP."""
 
     terrain_levels = CurrTerm(
-        func=mdp.tracking_exp_vel, params={"lin_vel_threshold": (0.3, 0.6), "ang_vel_threshold": (0.0, 0.0)}
+        func=mdp.tracking_exp_vel, params={
+            "lin_vel_threshold": (0.3, 0.6), 
+            "ang_vel_threshold": (0.0, 0.0)
+        }
+    )
+
+    volume_points_penetration_weight_feet = CurrTerm(
+        func=mdp.modify_rewards_weight,
+        params={
+            "term_name": "volume_points_penetration_feet",
+            "init_weight": -1.0,
+            "final_weight": -100.0,
+            "lin_vel_threshold": (0.7, 0.9),
+            "ang_vel_threshold": (0.0, 0.0),
+            "step_size": 0.03,
+        },
+    )
+    volume_points_penetration_weight_knee = CurrTerm(
+        func=mdp.modify_rewards_weight,
+        params={
+            "term_name": "volume_points_penetration_knee",
+            "init_weight": -1.0,
+            "final_weight": -100.0,
+            "lin_vel_threshold": (0.7, 0.9),
+            "ang_vel_threshold": (0.0, 0.0),
+            "step_size": 0.03,
+        },
+    )
+    feet_stumble_weight = CurrTerm(
+        func=mdp.modify_rewards_weight,
+        params={
+            "term_name": "feet_stumble",
+            "init_weight": -1.0,
+            "final_weight": -10.0,
+            "lin_vel_threshold": (0.7, 0.9),
+            "ang_vel_threshold": (0.0, 0.0),
+            "step_size": 0.03,
+        },
+    )
+    undesired_contacts_weight = CurrTerm(
+        func=mdp.modify_rewards_weight,
+        params={
+            "term_name": "undesired_contacts",
+            "init_weight": -1.0,
+            "final_weight": -10.0,
+            "lin_vel_threshold": (0.7, 0.9),
+            "ang_vel_threshold": (0.0, 0.0),
+            "step_size": 0.03,
+        },
     )
 
 

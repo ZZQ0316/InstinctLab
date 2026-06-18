@@ -30,6 +30,17 @@ class EdgeCylinderCfg(VirtualObstacleCfg):
 
     cylinder_radius: float = 0.2
     """The radius of the edge cylinder, which is used to treat the edge cylinders as a virtual obstacle."""
+    edge_offset_distance: float = 0.0
+    """Distance to offset the cylinder towards the exterior of the terrain.
+    The offset direction is determined by the normal of the vertical face (rise) at the edge.
+    Set to cylinder_radius to have the cylinder only on the exterior side of the rise face.
+    """
+    edge_offset_z_threshold: float = 0.5
+    """Threshold for |z| of face normal to classify a face as horizontal (tread) or vertical (rise)."""
+    edge_offset_up: float = 0.0
+    """Additional upward (positive z) offset for the cylinder."""
+    convex_edges_only: bool = False
+    """If True, only keep convex sharp edges and drop concave sharp edges."""
     num_grid_cells: int = 64**3
     """The number of grid cells to use for spatial partitioning of the edge cylinders.
     Usually the power of 2, e.g., 64^3 = 262144.
