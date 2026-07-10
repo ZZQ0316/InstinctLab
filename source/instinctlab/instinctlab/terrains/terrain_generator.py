@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import torch
 from typing import TYPE_CHECKING
 
 from isaaclab.terrains import SubTerrainBaseCfg, TerrainGenerator
@@ -16,6 +17,7 @@ class FiledTerrainGenerator(TerrainGenerator):
         # Access the i-th row, j-th column subterrain config by
         # self._subterrain_specific_cfgs[i*num_cols + j]
         self._subterrain_specific_cfgs: list[SubTerrainBaseCfg] = []
+        self._subterrain_name_by_cfg_id = {id(sub_cfg): name for name, sub_cfg in cfg.sub_terrains.items()}
         super().__init__(cfg, device)
 
     def _get_terrain_mesh(self, difficulty: float, cfg: SubTerrainBaseCfg):
@@ -25,10 +27,12 @@ class FiledTerrainGenerator(TerrainGenerator):
         mesh, origin = super()._get_terrain_mesh(difficulty, cfg)
         # >>> NOTE: This code snippet is copied from the super implementation because they copied the cfg
         # but we need to store the modified cfg for each subterrain.
+        terrain_name = self._subterrain_name_by_cfg_id.get(id(cfg))
         cfg = cfg.copy()
         # add other parameters to the sub-terrain configuration
         cfg.difficulty = float(difficulty)
         cfg.seed = self.cfg.seed
+        cfg.terrain_name = terrain_name
         # <<< NOTE
         self._subterrain_specific_cfgs.append(cfg)  # since in super function, cfg is a copy of the original config.
 

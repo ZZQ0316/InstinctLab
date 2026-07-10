@@ -4,7 +4,7 @@ import torch
 import trimesh
 from abc import ABC, abstractmethod
 from dataclasses import MISSING
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.utils import configclass
@@ -26,7 +26,12 @@ class VirtualObstacleBase(ABC):
         self.cfg = cfg
 
     @abstractmethod
-    def generate(self, mesh: trimesh.Trimesh, device: torch.device | str = "cpu") -> None:
+    def generate(
+        self,
+        mesh: trimesh.Trimesh,
+        device: torch.device | str = "cpu",
+        terrain_context: dict[str, Any] | None = None,
+    ) -> None:
         """Generate the virtual obstacle mesh based on the provided terrain mesh.
         NOTE: This interface might be updated in the future to support more complex generation logic.
 

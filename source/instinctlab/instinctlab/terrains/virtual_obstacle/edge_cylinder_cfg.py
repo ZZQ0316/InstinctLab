@@ -20,6 +20,17 @@ from .virtual_obstacle_base import VirtualObstacleCfg
 
 
 @configclass
+class EdgeCylinderOverrideCfg:
+    cylinder_radius: float = MISSING
+    edge_offset_distance: float = MISSING
+    edge_offset_up: float = MISSING
+    # 凹边缘参数
+    concave_cylinder_radius: float = 0.02
+    concave_edge_offset_distance: float = 0.0
+    concave_edge_offset_up: float = 0.0
+
+
+@configclass
 class EdgeCylinderCfg(VirtualObstacleCfg):
     """The class to use for the edge cylinder detector."""
 
@@ -45,6 +56,13 @@ class EdgeCylinderCfg(VirtualObstacleCfg):
     """The number of grid cells to use for spatial partitioning of the edge cylinders.
     Usually the power of 2, e.g., 64^3 = 262144.
     """
+    terrain_overrides: dict[str, EdgeCylinderOverrideCfg] = {}
+    """Optional per-terrain-name overrides for radius and offsets."""
+
+    # 凹边缘参数（默认 2cm 半径，无偏移）
+    concave_cylinder_radius: float = 0.02
+    concave_edge_offset_distance: float = 0.0
+    concave_edge_offset_up: float = 0.0
 
     visualizer: VisualizationMarkersCfg = VisualizationMarkersCfg(
         prim_path="/Visuals/edgeMarkers",

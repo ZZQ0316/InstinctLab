@@ -42,96 +42,116 @@ class EdgeCylinder(VirtualObstacleBase):
         self.cfg: EdgeCylinderCfg = cfg
         self.angle_threshold = cfg.angle_threshold
 
-    def generate(self, mesh: trimesh.Trimesh, device="cpu") -> None:
-        """Detect sharp edges in the mesh and store the edge cylinder as virtual obstacle.
-
-        Args:
-            mesh: The trimesh object to analyze.
-
-        Returns:
-            A np array batch indicating the edges: (num_edges, 6)
-            - x, y, z coordinates of the edge start point
-            - x, y, z coordinates of the edge end point
-        """
+    def generate(self, mesh: trimesh.Trimesh, device="cpu", terrain_context=None) -> None:
+        """Detect sharp edges in the mesh and store the edge cylinder as virtual obstacle."""
         angles = mesh.face_adjacency_angles
-        # convert max_angle in degrees to radians
         threshold = np.deg2rad(self.angle_threshold)
-        # pick only those adjacencies whose angle exceeds threshold
         sharp_mask = angles > threshold
         if not np.any(sharp_mask):
             edge_end_points = np.empty((0, 6), dtype=np.float32)
+            edge_radii = np.empty((0,), dtype=np.float32)
             print("[WARNING] No sharp edges detected.")
         else:
-            # get the corresponding edges (vertex index pairs)
-            # face_adjacency_edges is (n_adj, 2) vertex indices for each adjacency
             sharp_edges = mesh.face_adjacency_edges[sharp_mask]
-            # 每条边缘相邻的两个面的索引
             sharp_adj_faces = mesh.face_adjacency[sharp_mask]
+            is_convex = mesh.face_adjacency_convex[sharp_mask]
 
-            # 只在台阶前沿设置虚拟障碍，根本不设置，即可以踢内壁，但不可以踩边缘
-            if getattr(self.cfg, "convex_edges_only", False):
-                convex_mask = mesh.face_adjacency_convex[sharp_mask]
-                sharp_edges = sharp_edges[convex_mask]
-                sharp_adj_faces = sharp_adj_faces[convex_mask]
-
-            # look up vertex coordinates
             v = mesh.vertices
-            # build (num_edges, 6) array: [x0,y0,z0, x1,y1,z1]
             edge_coords = np.hstack([v[sharp_edges[:, 0]], v[sharp_edges[:, 1]]])
+            edge_midpoints = 0.5 * (edge_coords[:, :3] + edge_coords[:, 3:])
+            terrain_params = self._resolve_edge_params_full(edge_midpoints, terrain_context)
 
-            # Offset edges towards exterior if configured
-            offset_dist = getattr(self.cfg, "edge_offset_distance", 0.0)
-            if offset_dist > 0:
-                face_normals = mesh.face_normals
-                # 法向量 Z 分量 > 0.5 的认为是水平面（台阶面），否则是垂直面（台阶立面）
-                z_thresh = getattr(self.cfg, "edge_offset_z_threshold", 0.5)
-                # normals_a/b[i] 是第 i 条边缘相邻的面A/B的法向量（长度为 3，表示方向）。
-                normals_a = face_normals[sharp_adj_faces[:, 0]]
-                normals_b = face_normals[sharp_adj_faces[:, 1]]
+            is_small_terrain = np.array([name == "pyramid_stairs_small" for name in terrain_params["terrain_name"]], dtype=bool)
+            groups = [
+                (
+                    is_small_terrain & is_convex,
+                    terrain_params["radius"],
+                    terrain_params["offset_distance"],
+                    terrain_params["offset_up"],
+                ),
+                (
+                    (~is_small_terrain) & is_convex,
+                    terrain_params["radius"],
+                    terrain_params["offset_distance"],
+                    terrain_params["offset_up"],
+                ),
+                (
+                    (~is_small_terrain) & (~is_convex),
+                    terrain_params["concave_radius"],
+                    terrain_params["concave_offset_distance"],
+                    terrain_params["concave_offset_up"],
+                ),
+            ]
 
-                # For each edge, determine offset direction
-                num_edges = edge_coords.shape[0]
-                edge_offsets = np.zeros((num_edges, 3), dtype=np.float32)
+            processed_edge_groups = []
+            processed_radius_groups = []
+            face_normals = mesh.face_normals
+            z_thresh = getattr(self.cfg, "edge_offset_z_threshold", 0.5)
 
-                up_offset = getattr(self.cfg, "edge_offset_up", 0.0)
-                for i in range(num_edges):
+            for group_mask, radii_src, offset_distances_src, offset_ups_src in groups:
+                if not np.any(group_mask):
+                    continue
+
+                group_edge_coords = edge_coords[group_mask].copy()
+                group_adj_faces = sharp_adj_faces[group_mask]
+                group_radii = radii_src[group_mask].astype(np.float32)
+                group_offset_distances = offset_distances_src[group_mask].astype(np.float32)
+                group_offset_ups = offset_ups_src[group_mask].astype(np.float32)
+
+                normals_a = face_normals[group_adj_faces[:, 0]]
+                normals_b = face_normals[group_adj_faces[:, 1]]
+                edge_offsets = np.zeros((group_edge_coords.shape[0], 3), dtype=np.float32)
+
+                for i in range(group_edge_coords.shape[0]):
                     na = normals_a[i]
                     nb = normals_b[i]
-                    # Determine which face is horizontal (tread) and which is vertical (rise)
+                    offset_dist = group_offset_distances[i]
+                    up_offset = group_offset_ups[i]
                     is_horiz_a = abs(na[2]) > z_thresh
                     is_horiz_b = abs(nb[2]) > z_thresh
-                    # Only offset if one face is horizontal and one is vertical (rise-tread junction)
                     if is_horiz_a != is_horiz_b:
-                        # Take the vertical (rise) face normal
                         rise_normal = nb if is_horiz_a else na
-                        # Offset direction is same as rise normal (towards exterior)
-                        # Take only horizontal (x,y) component, normalize
-                        # 台阶立面是垂直的，它的法向量完全是水平的（z=0），所以取水平分量就是取法向量本身。
                         offset_dir = np.array([rise_normal[0], rise_normal[1], 0.0], dtype=np.float32)
                         offset_len = np.linalg.norm(offset_dir[:2])
                         if offset_len > 1e-6:
                             offset_dir[:2] /= offset_len
-                            edge_offsets[i] = offset_dir * offset_dist # 水平方向偏移
-                            edge_offsets[i, 2] = up_offset # 垂直方向偏移
+                            edge_offsets[i] = offset_dir * offset_dist
+                            edge_offsets[i, 2] = up_offset
 
-                # Apply offsets to both start and end points of each edge
-                edge_coords[:, :3] += edge_offsets
-                edge_coords[:, 3:] += edge_offsets
+                group_edge_coords[:, :3] += edge_offsets
+                group_edge_coords[:, 3:] += edge_offsets
 
-            edge_end_points = self.process_edges(edge_coords)
+                processed_group_edges = self.process_edges(group_edge_coords)
+                if processed_group_edges.size == 0:
+                    continue
+
+                processed_edge_groups.append(processed_group_edges)
+                if np.allclose(group_radii, group_radii[0]):
+                    processed_radius_groups.append(
+                        np.full(processed_group_edges.shape[0], group_radii[0], dtype=np.float32)
+                    )
+                else:
+                    processed_midpoints = 0.5 * (processed_group_edges[:, :3] + processed_group_edges[:, 3:])
+                    processed_params = self._resolve_edge_params_full(processed_midpoints, terrain_context)
+                    if np.allclose(offset_distances_src[group_mask], 0.0) and np.allclose(offset_ups_src[group_mask], 0.0):
+                        processed_radius_groups.append(processed_params["concave_radius"].astype(np.float32))
+                    else:
+                        processed_radius_groups.append(processed_params["radius"].astype(np.float32))
+
+            if processed_edge_groups:
+                edge_end_points = np.concatenate(processed_edge_groups, axis=0).astype(np.float32)
+                edge_radii = np.concatenate(processed_radius_groups, axis=0).astype(np.float32)
+            else:
+                edge_end_points = np.empty((0, 6), dtype=np.float32)
+                edge_radii = np.empty((0,), dtype=np.float32)
             print(f"Detected {edge_end_points.shape[0]} edges after processing.")
+
         self.device = device if isinstance(device, torch.device) else torch.device(device)
         self.edges_pyt = torch.tensor(edge_end_points, dtype=torch.float32, device=self.device)
-        # create a cylinder spatial grid for the edges and for penetration offset computation
+        self.edge_radii_pyt = torch.tensor(edge_radii, dtype=torch.float32, device=self.device)
         if edge_end_points.size > 0:
             self.cylinders = CylinderSpatialGrid(
-                cylinders=np.concatenate(
-                    [
-                        edge_end_points,
-                        np.ones_like(edge_end_points[:, :1]) * self.cfg.cylinder_radius,
-                    ],
-                    axis=1,
-                ),
+                cylinders=np.concatenate([edge_end_points, edge_radii[:, None]], axis=1),
                 num_grid_cells=self.cfg.num_grid_cells,
                 device=self.device,
             )
@@ -169,8 +189,8 @@ class EdgeCylinder(VirtualObstacleBase):
         quat = math_utils.quat_mul(quat, self._cylinder_rotate_y_90.expand(quat.shape[0], -1))
         # compute the scale to match the length and the edge thickness.
         scales = torch.ones(len(self.edges_pyt), 3, device=self.device)
-        scales[:, 0] = self.cfg.cylinder_radius
-        scales[:, 1] = self.cfg.cylinder_radius
+        scales[:, 0] = self.edge_radii_pyt
+        scales[:, 1] = self.edge_radii_pyt
         scales[:, 2] = torch.norm(direction, dim=-1)
         self._cylinder_visualizer.visualize(
             translations=trans,
@@ -196,6 +216,91 @@ class EdgeCylinder(VirtualObstacleBase):
             A np array of processed edge coordinates.
         """
         return edge_coords
+
+    def _resolve_edge_params_full(self, edge_midpoints: np.ndarray, terrain_context) -> dict[str, np.ndarray]:
+        num_edges = edge_midpoints.shape[0]
+        radii = np.full(num_edges, self.cfg.cylinder_radius, dtype=np.float32)
+        offset_distances = np.full(num_edges, self.cfg.edge_offset_distance, dtype=np.float32)
+        offset_ups = np.full(num_edges, self.cfg.edge_offset_up, dtype=np.float32)
+        concave_radii = np.full(num_edges, getattr(self.cfg, "concave_cylinder_radius", 0.02), dtype=np.float32)
+        concave_offset_distances = np.full(num_edges, getattr(self.cfg, "concave_edge_offset_distance", 0.0), dtype=np.float32)
+        concave_offset_ups = np.full(num_edges, getattr(self.cfg, "concave_edge_offset_up", 0.0), dtype=np.float32)
+        terrain_names = [None] * num_edges
+
+        if num_edges == 0 or terrain_context is None:
+            return {
+                "radius": radii,
+                "offset_distance": offset_distances,
+                "offset_up": offset_ups,
+                "concave_radius": concave_radii,
+                "concave_offset_distance": concave_offset_distances,
+                "concave_offset_up": concave_offset_ups,
+                "terrain_name": terrain_names,
+            }
+
+        terrain_origins = terrain_context.get("terrain_origins")
+        subterrain_specific_cfgs = terrain_context.get("subterrain_specific_cfgs")
+        size = terrain_context.get("size")
+        if terrain_origins is None or subterrain_specific_cfgs is None or size is None:
+            return {
+                "radius": radii,
+                "offset_distance": offset_distances,
+                "offset_up": offset_ups,
+                "concave_radius": concave_radii,
+                "concave_offset_distance": concave_offset_distances,
+                "concave_offset_up": concave_offset_ups,
+                "terrain_name": terrain_names,
+            }
+
+        terrain_origins = np.asarray(terrain_origins)
+        half_size_x = float(size[0]) * 0.5
+        half_size_y = float(size[1]) * 0.5
+        num_cols = terrain_origins.shape[1]
+        overrides = getattr(self.cfg, "terrain_overrides", {})
+
+        for i, midpoint in enumerate(edge_midpoints):
+            midpoint_x, midpoint_y = midpoint[:2]
+            matched_cfg = None
+            for row in range(terrain_origins.shape[0]):
+                for col in range(num_cols):
+                    origin_x, origin_y = terrain_origins[row, col, :2]
+                    if (
+                        origin_x - half_size_x <= midpoint_x <= origin_x + half_size_x
+                        and origin_y - half_size_y <= midpoint_y <= origin_y + half_size_y
+                    ):
+                        matched_cfg = subterrain_specific_cfgs[row * num_cols + col]
+                        break
+                if matched_cfg is not None:
+                    break
+            terrain_name = getattr(matched_cfg, "terrain_name", None)
+            terrain_names[i] = terrain_name
+            override = overrides.get(terrain_name) if terrain_name is not None else None
+            if override is not None:
+                radii[i] = override.cylinder_radius
+                offset_distances[i] = override.edge_offset_distance
+                offset_ups[i] = override.edge_offset_up
+                # 凹边缘参数如果有 override 也用 override，否则用默认
+                concave_radii[i] = getattr(override, "concave_cylinder_radius", 0.02)
+                concave_offset_distances[i] = getattr(override, "concave_edge_offset_distance", 0.0)
+                concave_offset_ups[i] = getattr(override, "concave_edge_offset_up", 0.0)
+
+        return {
+            "radius": radii,
+            "offset_distance": offset_distances,
+            "offset_up": offset_ups,
+            "concave_radius": concave_radii,
+            "concave_offset_distance": concave_offset_distances,
+            "concave_offset_up": concave_offset_ups,
+            "terrain_name": terrain_names,
+        }
+
+    def _resolve_edge_params(self, edge_midpoints: np.ndarray, terrain_context) -> dict[str, np.ndarray]:
+        full_params = self._resolve_edge_params_full(edge_midpoints, terrain_context)
+        return {
+            "radius": full_params["radius"],
+            "offset_distance": full_params["offset_distance"],
+            "offset_up": full_params["offset_up"],
+        }
 
 
 class PluckerEdgeCylinder(EdgeCylinder):
@@ -454,7 +559,7 @@ class RayEdgeCylinder(VirtualObstacleBase):
     def __init__(self, cfg: RayEdgeCylinderCfg):
         self.cfg: RayEdgeCylinderCfg = cfg
 
-    def generate(self, mesh: trimesh.Trimesh, device="cpu") -> None:
+    def generate(self, mesh: trimesh.Trimesh, device="cpu", terrain_context=None) -> None:
         """Detect sharp edges in the mesh and store the edge cylinder as virtual obstacle.
 
         Args:
@@ -704,7 +809,7 @@ class FeatureEdgeCylinder(VirtualObstacleBase):
     def __init__(self, cfg: FeatureEdgeCylinderCfg):
         self.cfg: FeatureEdgeCylinderCfg = cfg
 
-    def generate(self, mesh: trimesh.Trimesh, device="cpu") -> None:
+    def generate(self, mesh: trimesh.Trimesh, device="cpu", terrain_context=None) -> None:
         """Detect sharp edges in the mesh and store the edge cylinder as virtual obstacle.
 
         Args:

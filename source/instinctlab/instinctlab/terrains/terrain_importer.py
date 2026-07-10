@@ -61,11 +61,20 @@ class TerrainImporter(TerrainImporterBase):
         mesh.merge_vertices()
         mesh.update_faces(mesh.unique_faces())  # remove duplicate faces
         mesh.remove_unreferenced_vertices()
+        terrain_context = None
+        if hasattr(self, "terrain_generator"):
+            terrain_context = {
+                "terrain_origins": getattr(self.terrain_generator, "terrain_origins", None),
+                "subterrain_specific_cfgs": getattr(self.terrain_generator, "subterrain_specific_cfgs", None),
+                "size": getattr(getattr(self, "cfg", None), "terrain_generator", None).size
+                if getattr(getattr(self, "cfg", None), "terrain_generator", None) is not None
+                else None,
+            }
         # Generate virtual obstacles based on the imported mesh.
         # NOTE: generate virtual obstacle first because it might modify the mesh.
         for name, virtual_obstacle in self._virtual_obstacles.items():
             with Timer(f"Generate virtual obstacle {name}"):
-                virtual_obstacle.generate(mesh, device=self.device)
+                virtual_obstacle.generate(mesh, device=self.device, terrain_context=terrain_context)
 
         super().import_mesh(name, mesh)
 

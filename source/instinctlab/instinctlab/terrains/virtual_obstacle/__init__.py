@@ -1,5 +1,6 @@
 from .edge_cylinder_cfg import (
     EdgeCylinderCfg,
+    EdgeCylinderOverrideCfg,
     FeatureEdgeCylinderCfg,
     GreedyconcatEdgeCylinderCfg,
     PluckerEdgeCylinderCfg,
