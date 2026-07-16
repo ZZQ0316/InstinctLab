@@ -50,6 +50,8 @@ class EdgeCylinder(VirtualObstacleBase):
         if not np.any(sharp_mask):
             edge_end_points = np.empty((0, 6), dtype=np.float32)
             edge_radii = np.empty((0,), dtype=np.float32)
+            clip_modes = np.empty((0,), dtype=np.int32)
+            cut_normals = np.empty((0, 3), dtype=np.float32)
             print("[WARNING] No sharp edges detected.")
         else:
             sharp_edges = mesh.face_adjacency_edges[sharp_mask]
@@ -61,52 +63,73 @@ class EdgeCylinder(VirtualObstacleBase):
             edge_midpoints = 0.5 * (edge_coords[:, :3] + edge_coords[:, 3:])
             terrain_params = self._resolve_edge_params_full(edge_midpoints, terrain_context)
 
-            is_small_terrain = np.array([name == "pyramid_stairs_small" for name in terrain_params["terrain_name"]], dtype=bool)
-            groups = [
-                (
-                    is_small_terrain & is_convex,
-                    terrain_params["radius"],
-                    terrain_params["offset_distance"],
-                    terrain_params["offset_up"],
-                ),
-                (
-                    (~is_small_terrain) & is_convex,
-                    terrain_params["radius"],
-                    terrain_params["offset_distance"],
-                    terrain_params["offset_up"],
-                ),
-                (
-                    (~is_small_terrain) & (~is_convex),
-                    terrain_params["concave_radius"],
-                    terrain_params["concave_offset_distance"],
-                    terrain_params["concave_offset_up"],
-                ),
-            ]
-
-            processed_edge_groups = []
-            processed_radius_groups = []
+            edge_groups = []
+            radius_groups = []
+            clip_mode_groups = []
+            cut_normal_groups = []
             face_normals = mesh.face_normals
             z_thresh = getattr(self.cfg, "edge_offset_z_threshold", 0.5)
+            convex_clip_mode = getattr(self.cfg, "convex_clip_mode", "outside_half")
+            clip_mode_full = 0
+            clip_mode_outside_half = 1
 
-            for group_mask, radii_src, offset_distances_src, offset_ups_src in groups:
-                if not np.any(group_mask):
-                    continue
+            convex_mask = is_convex
+            if np.any(convex_mask):
+                convex_edges = edge_coords[convex_mask].copy()
+                convex_adj_faces = sharp_adj_faces[convex_mask]
+                convex_radii = terrain_params["radius"][convex_mask].astype(np.float32)
+                convex_offset_distances = terrain_params["offset_distance"][convex_mask].astype(np.float32)
+                convex_offset_ups = terrain_params["offset_up"][convex_mask].astype(np.float32)
+                convex_cut_normals = np.zeros((convex_edges.shape[0], 3), dtype=np.float32)
+                convex_clip_modes = np.full(convex_edges.shape[0], clip_mode_full, dtype=np.int32)
+                convex_offsets = np.zeros((convex_edges.shape[0], 3), dtype=np.float32)
 
-                group_edge_coords = edge_coords[group_mask].copy()
-                group_adj_faces = sharp_adj_faces[group_mask]
-                group_radii = radii_src[group_mask].astype(np.float32)
-                group_offset_distances = offset_distances_src[group_mask].astype(np.float32)
-                group_offset_ups = offset_ups_src[group_mask].astype(np.float32)
-
-                normals_a = face_normals[group_adj_faces[:, 0]]
-                normals_b = face_normals[group_adj_faces[:, 1]]
-                edge_offsets = np.zeros((group_edge_coords.shape[0], 3), dtype=np.float32)
-
-                for i in range(group_edge_coords.shape[0]):
+                normals_a = face_normals[convex_adj_faces[:, 0]]
+                normals_b = face_normals[convex_adj_faces[:, 1]]
+                for i in range(convex_edges.shape[0]):
                     na = normals_a[i]
                     nb = normals_b[i]
-                    offset_dist = group_offset_distances[i]
-                    up_offset = group_offset_ups[i]
+                    offset_dist = convex_offset_distances[i]
+                    up_offset = convex_offset_ups[i]
+                    is_horiz_a = abs(na[2]) > z_thresh
+                    is_horiz_b = abs(nb[2]) > z_thresh
+                    if is_horiz_a != is_horiz_b:
+                        rise_normal = nb if is_horiz_a else na
+                        outward_dir = np.array([rise_normal[0], rise_normal[1], 0.0], dtype=np.float32)
+                        outward_len = np.linalg.norm(outward_dir[:2])
+                        if outward_len > 1e-6:
+                            outward_dir[:2] /= outward_len
+                            convex_offsets[i] = outward_dir * offset_dist
+                            convex_offsets[i, 2] = up_offset
+                            convex_cut_normals[i] = outward_dir
+                            if convex_clip_mode == "outside_half":
+                                convex_clip_modes[i] = clip_mode_outside_half
+                    else:
+                        convex_offsets[i, 2] = up_offset
+
+                convex_edges[:, :3] += convex_offsets
+                convex_edges[:, 3:] += convex_offsets
+                edge_groups.append(convex_edges.astype(np.float32))
+                radius_groups.append(convex_radii)
+                clip_mode_groups.append(convex_clip_modes)
+                cut_normal_groups.append(convex_cut_normals)
+
+            concave_mask = ~is_convex
+            if np.any(concave_mask):
+                concave_edges = edge_coords[concave_mask].copy()
+                concave_adj_faces = sharp_adj_faces[concave_mask]
+                concave_radii = terrain_params["concave_radius"][concave_mask].astype(np.float32)
+                concave_offset_distances = terrain_params["concave_offset_distance"][concave_mask].astype(np.float32)
+                concave_offset_ups = terrain_params["concave_offset_up"][concave_mask].astype(np.float32)
+
+                normals_a = face_normals[concave_adj_faces[:, 0]]
+                normals_b = face_normals[concave_adj_faces[:, 1]]
+                concave_offsets = np.zeros((concave_edges.shape[0], 3), dtype=np.float32)
+                for i in range(concave_edges.shape[0]):
+                    na = normals_a[i]
+                    nb = normals_b[i]
+                    offset_dist = concave_offset_distances[i]
+                    up_offset = concave_offset_ups[i]
                     is_horiz_a = abs(na[2]) > z_thresh
                     is_horiz_b = abs(nb[2]) > z_thresh
                     if is_horiz_a != is_horiz_b:
@@ -115,45 +138,50 @@ class EdgeCylinder(VirtualObstacleBase):
                         offset_len = np.linalg.norm(offset_dir[:2])
                         if offset_len > 1e-6:
                             offset_dir[:2] /= offset_len
-                            edge_offsets[i] = offset_dir * offset_dist
-                            edge_offsets[i, 2] = up_offset
-
-                group_edge_coords[:, :3] += edge_offsets
-                group_edge_coords[:, 3:] += edge_offsets
-
-                processed_group_edges = self.process_edges(group_edge_coords)
-                if processed_group_edges.size == 0:
-                    continue
-
-                processed_edge_groups.append(processed_group_edges)
-                if np.allclose(group_radii, group_radii[0]):
-                    processed_radius_groups.append(
-                        np.full(processed_group_edges.shape[0], group_radii[0], dtype=np.float32)
-                    )
-                else:
-                    processed_midpoints = 0.5 * (processed_group_edges[:, :3] + processed_group_edges[:, 3:])
-                    processed_params = self._resolve_edge_params_full(processed_midpoints, terrain_context)
-                    if np.allclose(offset_distances_src[group_mask], 0.0) and np.allclose(offset_ups_src[group_mask], 0.0):
-                        processed_radius_groups.append(processed_params["concave_radius"].astype(np.float32))
+                            concave_offsets[i] = offset_dir * offset_dist
+                            concave_offsets[i, 2] = up_offset
                     else:
-                        processed_radius_groups.append(processed_params["radius"].astype(np.float32))
+                        concave_offsets[i, 2] = up_offset
 
-            if processed_edge_groups:
-                edge_end_points = np.concatenate(processed_edge_groups, axis=0).astype(np.float32)
-                edge_radii = np.concatenate(processed_radius_groups, axis=0).astype(np.float32)
+                concave_edges[:, :3] += concave_offsets
+                concave_edges[:, 3:] += concave_offsets
+                processed_concave_edges = self.process_edges(concave_edges)
+                if processed_concave_edges.size > 0:
+                    edge_groups.append(processed_concave_edges.astype(np.float32))
+                    if np.allclose(concave_radii, concave_radii[0]):
+                        processed_concave_radii = np.full(processed_concave_edges.shape[0], concave_radii[0], dtype=np.float32)
+                    else:
+                        processed_midpoints = 0.5 * (processed_concave_edges[:, :3] + processed_concave_edges[:, 3:])
+                        processed_params = self._resolve_edge_params_full(processed_midpoints, terrain_context)
+                        processed_concave_radii = processed_params["concave_radius"].astype(np.float32)
+                    radius_groups.append(processed_concave_radii)
+                    clip_mode_groups.append(np.full(processed_concave_edges.shape[0], clip_mode_full, dtype=np.int32))
+                    cut_normal_groups.append(np.zeros((processed_concave_edges.shape[0], 3), dtype=np.float32))
+
+            if edge_groups:
+                edge_end_points = np.concatenate(edge_groups, axis=0).astype(np.float32)
+                edge_radii = np.concatenate(radius_groups, axis=0).astype(np.float32)
+                clip_modes = np.concatenate(clip_mode_groups, axis=0).astype(np.int32)
+                cut_normals = np.concatenate(cut_normal_groups, axis=0).astype(np.float32)
             else:
                 edge_end_points = np.empty((0, 6), dtype=np.float32)
                 edge_radii = np.empty((0,), dtype=np.float32)
+                clip_modes = np.empty((0,), dtype=np.int32)
+                cut_normals = np.empty((0, 3), dtype=np.float32)
             print(f"Detected {edge_end_points.shape[0]} edges after processing.")
 
         self.device = device if isinstance(device, torch.device) else torch.device(device)
         self.edges_pyt = torch.tensor(edge_end_points, dtype=torch.float32, device=self.device)
         self.edge_radii_pyt = torch.tensor(edge_radii, dtype=torch.float32, device=self.device)
+        self.edge_clip_modes_pyt = torch.tensor(clip_modes, dtype=torch.int32, device=self.device)
+        self.edge_cut_normals_pyt = torch.tensor(cut_normals, dtype=torch.float32, device=self.device)
         if edge_end_points.size > 0:
             self.cylinders = CylinderSpatialGrid(
                 cylinders=np.concatenate([edge_end_points, edge_radii[:, None]], axis=1),
                 num_grid_cells=self.cfg.num_grid_cells,
                 device=self.device,
+                clip_modes=clip_modes,
+                cut_normals=cut_normals,
             )
         else:
             self.cylinders = None

@@ -2,6 +2,11 @@ from typing import Any
 
 import warp as wp
 
+CLIP_MODE_FULL = 0
+CLIP_MODE_OUTSIDE_HALF = 1
+SIDE_EPS = 1e-6
+AXIS_EPS = 1e-8
+
 
 @wp.kernel(enable_backward=False)
 def points_penetrate_cylinder_kernel(
@@ -9,6 +14,8 @@ def points_penetrate_cylinder_kernel(
     cylinder_start: wp.array(dtype=wp.vec3),
     cylinder_end: wp.array(dtype=wp.vec3),
     cylinder_thinkness: wp.array(dtype=wp.float32),
+    cylinder_clip_mode: wp.array(dtype=wp.int32),
+    cylinder_cut_normal: wp.array(dtype=wp.vec3),
     cell_offsets: wp.array(dtype=wp.int32),
     cell_indices: wp.array(dtype=wp.int32),
     grid_res: wp.vec3i,
@@ -64,24 +71,45 @@ def points_penetrate_cylinder_kernel(
 
                     ab = b - a
                     ab_len = wp.length(ab)
+                    if ab_len <= AXIS_EPS:
+                        continue
                     ab_dir = ab / ab_len
                     ap = p - a
                     t = wp.dot(ap, ab_dir)
 
                     if t < 0.0 or t > ab_len:
-                        # points outside the cylinder segment
                         continue
 
-                    # Project point onto the cylinder segment
                     proj = a + t * ab_dir
-                    dist = wp.length(p - proj)
+                    radial = p - proj
+                    dist = wp.length(radial)
+
+                    if cylinder_clip_mode[cid] == CLIP_MODE_OUTSIDE_HALF:
+                        side = wp.dot(radial, cylinder_cut_normal[cid])
+                        if side < -SIDE_EPS:
+                            continue
 
                     if dist < r:
                         d = r - dist
                         if d > depth:
                             depth = d
-                            offset_ = (proj - p) * (d / dist)
-                            # direction from point to projected point
+                            if dist > AXIS_EPS:
+                                offset_ = (proj - p) * (d / dist)
+                            else:
+                                cut_normal = cylinder_cut_normal[cid]
+                                cut_normal_len = wp.length(cut_normal)
+                                if cylinder_clip_mode[cid] == CLIP_MODE_OUTSIDE_HALF and cut_normal_len > SIDE_EPS:
+                                    offset_ = -cut_normal * (d / cut_normal_len)
+                                else:
+                                    any_perp = wp.cross(ab_dir, wp.vec3(0.0, 0.0, 1.0))
+                                    any_perp_len = wp.length(any_perp)
+                                    if any_perp_len <= SIDE_EPS:
+                                        any_perp = wp.cross(ab_dir, wp.vec3(0.0, 1.0, 0.0))
+                                        any_perp_len = wp.length(any_perp)
+                                    if any_perp_len > SIDE_EPS:
+                                        offset_ = -any_perp * (d / any_perp_len)
+                                    else:
+                                        offset_ = wp.vec3(0.0, 0.0, 0.0)
                             penetrate_offset_.x = offset_.x
                             penetrate_offset_.y = offset_.y
                             penetrate_offset_.z = offset_.z

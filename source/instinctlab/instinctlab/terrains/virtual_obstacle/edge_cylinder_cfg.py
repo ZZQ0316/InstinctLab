@@ -50,14 +50,15 @@ class EdgeCylinderCfg(VirtualObstacleCfg):
     """Threshold for |z| of face normal to classify a face as horizontal (tread) or vertical (rise)."""
     edge_offset_up: float = 0.0
     """Additional upward (positive z) offset for the cylinder."""
-    convex_edges_only: bool = False
-    """If True, only keep convex sharp edges and drop concave sharp edges."""
     num_grid_cells: int = 64**3
     """The number of grid cells to use for spatial partitioning of the edge cylinders.
     Usually the power of 2, e.g., 64^3 = 262144.
     """
     terrain_overrides: dict[str, EdgeCylinderOverrideCfg] = {}
     """Optional per-terrain-name overrides for radius and offsets."""
+
+    convex_clip_mode: Literal["full", "outside_half"] = "outside_half"
+    """Clipping mode for convex edge cylinders."""
 
     # 凹边缘参数（默认 2cm 半径，无偏移）
     concave_cylinder_radius: float = 0.02

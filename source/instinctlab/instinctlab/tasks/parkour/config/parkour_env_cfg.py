@@ -5,6 +5,7 @@ from dataclasses import MISSING
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
+from isaaclab.markers import VisualizationMarkersCfg
 from isaaclab.managers import CurriculumTermCfg as CurrTerm
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
@@ -27,7 +28,7 @@ from instinctlab.assets.unitree_g1 import beyondmimic_action_scale
 from instinctlab.managers import MultiRewardCfg
 from instinctlab.motion_reference import MotionReferenceManagerCfg
 from instinctlab.sensors import Grid3dPointsGeneratorCfg, NoisyGroupedRayCasterCameraCfg, VolumePointsCfg
-from instinctlab.terrains import EdgeCylinderOverrideCfg, GreedyconcatEdgeCylinderCfg, TerrainImporterCfg
+from instinctlab.terrains import GreedyconcatEdgeCylinderCfg, TerrainImporterCfg
 from instinctlab.terrains.terrain_generator_cfg import FiledTerrainGeneratorCfg
 from instinctlab.utils.noise import (
     CropAndResizeCfg,
@@ -110,7 +111,7 @@ ROUGH_TERRAINS_CFG = FiledTerrainGeneratorCfg(
         ),
         "pyramid_stairs": terrain_gen.PerlinPyramidStairsTerrainCfg(
             proportion=0.2,
-            step_height_range=(0.05, 0.23),
+            step_height_range=(0.05, 0.20),
             step_width_range=(0.25, 0.30),
             platform_width=2.5,
             border_width=1.0,
@@ -137,7 +138,7 @@ ROUGH_TERRAINS_CFG = FiledTerrainGeneratorCfg(
         ),
         "pyramid_stairs_small": terrain_gen.PerlinPyramidStairsTerrainCfg(
             proportion=0.1,
-            step_height_range=(0.05, 0.1),
+            step_height_range=(0.10, 0.20),
             step_width=0.21,
             platform_width=2.5,
             border_width=1.0,
@@ -163,8 +164,8 @@ ROUGH_TERRAINS_CFG = FiledTerrainGeneratorCfg(
             },
         ),
         "pyramid_stairs_high": terrain_gen.PerlinPyramidStairsTerrainCfg(
-            proportion=0.0,
-            step_height_range=(0.05, 0.45),
+            proportion=0.05,
+            step_height_range=(0.05, 0.30),
             step_width_range=(1.50, 1.50),
             platform_width=4.0,
             border_width=1.0,
@@ -191,7 +192,7 @@ ROUGH_TERRAINS_CFG = FiledTerrainGeneratorCfg(
         ),
         "pyramid_stairs_inv": terrain_gen.PerlinInvertedPyramidStairsTerrainCfg(
             proportion=0.2,
-            step_height_range=(0.05, 0.23),
+            step_height_range=(0.05, 0.20),
             step_width_range=[0.25, 0.30],
             platform_width=2.5,
             border_width=1.0,
@@ -218,7 +219,7 @@ ROUGH_TERRAINS_CFG = FiledTerrainGeneratorCfg(
         ),
         "pyramid_stairs_inv_small": terrain_gen.PerlinInvertedPyramidStairsTerrainCfg(
             proportion=0.1,
-            step_height_range=(0.05, 0.1),
+            step_height_range=(0.10, 0.20),
             step_width=0.21,
             platform_width=2.5,
             border_width=1.0,
@@ -244,8 +245,8 @@ ROUGH_TERRAINS_CFG = FiledTerrainGeneratorCfg(
             },
         ),
         "pyramid_stairs_inv_high": terrain_gen.PerlinInvertedPyramidStairsTerrainCfg(
-            proportion=0.0,
-            step_height_range=(0.05, 0.45),
+            proportion=0.05,
+            step_height_range=(0.05, 0.30),
             step_width_range=(1.50, 1.50),
             platform_width=4.0,
             border_width=1.0,
@@ -271,11 +272,11 @@ ROUGH_TERRAINS_CFG = FiledTerrainGeneratorCfg(
             },
         ),
         "boxes": terrain_gen.PerlinDiscreteObstaclesTerrainCfg(
-            proportion=0.2,
+            proportion=0.1,
             num_obstacles=20,
             obstacle_height_mode="fixed",
             obstacle_width_range=(0.4, 1.5),
-            obstacle_height_range=(0.05, 0.23),
+            obstacle_height_range=(0.05, 0.30),
             platform_width=1.5,
             border_width=0.0,
             wall_prob=[0.3, 0.3, 0.3, 0.3],
@@ -472,14 +473,14 @@ ROUGH_TERRAINS_CFG_PLAY = FiledTerrainGeneratorCfg(
             proportion=1.0,
             per_step_height=(0.1, 0.1),
             per_step_width=2.5,
-            per_step_length=(0.3, 0.3),
+            per_step_length=(0.21, 0.21),
             num_steps=6,
             platform_length=1.0,
             wall_prob=[0.0, 0.0, 0.0, 0.0],
             wall_height=5.0,
             wall_thickness=0.05,
             perlin_cfg=terrain_gen.PerlinPlaneTerrainCfg(
-                noise_scale=0.02,
+                noise_scale=0.0,
                 noise_frequency=20,
                 fractal_octaves=2,
                 fractal_lacunarity=2.0,
@@ -507,7 +508,7 @@ ROUGH_TERRAINS_CFG_PLAY = FiledTerrainGeneratorCfg(
             wall_height=5.0,
             wall_thickness=0.05,
             perlin_cfg=terrain_gen.PerlinPlaneTerrainCfg(
-                noise_scale=0.02,
+                noise_scale=0.00,
                 noise_frequency=20,
                 fractal_octaves=2,
                 fractal_lacunarity=2.0,
@@ -548,25 +549,18 @@ class SceneCfg(InteractiveSceneCfg):
             project_uvw=True,
             texture_scale=(0.25, 0.25),
         ),
-        debug_vis=False,
+        debug_vis=True,
         virtual_obstacles={
             "edges": GreedyconcatEdgeCylinderCfg(
-                cylinder_radius=0.035,
                 min_points=2,
-                edge_offset_distance=0.015,
-                edge_offset_up=0.035,
-                convex_edges_only=False,
-                # 凹边缘默认参数：2cm 半径，无偏移
-                concave_cylinder_radius=0.02,
+                # 凸边缘参数
+                cylinder_radius=0.05,
+                edge_offset_distance=0.02,
+                edge_offset_up=0.0,
+                # 凹边缘参数
+                concave_cylinder_radius=0.025,
                 concave_edge_offset_distance=0.0,
-                concave_edge_offset_up=0.02,
-                terrain_overrides={
-                    "pyramid_stairs_small": EdgeCylinderOverrideCfg(
-                        cylinder_radius=0.025,
-                        edge_offset_distance=0.025,
-                        edge_offset_up=0.025,
-                    ),
-                },
+                concave_edge_offset_up=0.025,
             ),
         },
     )
@@ -591,13 +585,45 @@ class SceneCfg(InteractiveSceneCfg):
         mesh_prim_paths=["/World/ground"],
         update_period=0.02,
     )
+    left_foot_area_scanner = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/left_ankle_roll_link",
+        offset=RayCasterCfg.OffsetCfg(pos=(0.05, 0.0, 20.0)),
+        ray_alignment="yaw",
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.02, size=[0.18, 0.04]),
+        debug_vis=False,
+        mesh_prim_paths=["/World/ground"],
+        update_period=0.02,
+        visualizer_cfg=VisualizationMarkersCfg(
+            prim_path="/Visuals/FootAreaLeft",
+            markers={"hit": sim_utils.SphereCfg(
+                radius=0.005,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
+            )},
+        ),
+    )
+    right_foot_area_scanner = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/right_ankle_roll_link",
+        offset=RayCasterCfg.OffsetCfg(pos=(0.05, 0.0, 20.0)),
+        ray_alignment="yaw",
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.02, size=[0.18, 0.04]),
+        debug_vis=False,
+        mesh_prim_paths=["/World/ground"],
+        update_period=0.02,
+        visualizer_cfg=VisualizationMarkersCfg(
+            prim_path="/Visuals/FootAreaRight",
+            markers={"hit": sim_utils.SphereCfg(
+                radius=0.005,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
+            )},
+        ),
+    )
     contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True)
     leg_volume_points = VolumePointsCfg(
         prim_path="{ENV_REGEX_NS}/Robot/.*_ankle_roll_link",
         points_generator=Grid3dPointsGeneratorCfg(
-            x_min=-0.025,
-            x_max=0.12,
-            x_num=10,
+            x_min=-0.04,
+            x_max=0.14,
+            x_num=12,
             y_min=-0.03,
             y_max=0.03,
             y_num=5,
@@ -605,7 +631,7 @@ class SceneCfg(InteractiveSceneCfg):
             z_max=0.0,
             z_num=2,
         ),
-        debug_vis=False,
+        debug_vis=True,
     )
     camera = NoisyGroupedRayCasterCameraCfg(
         prim_path="{ENV_REGEX_NS}/Robot/torso_link",
@@ -643,12 +669,15 @@ class SceneCfg(InteractiveSceneCfg):
         # noise
         noise_pipeline={
             "crop_and_resize": CropAndResizeCfg(crop_region=(18, 0, 16, 16)),
+            "range_based_gaussian": RangeBasedGaussianNoiseCfg(min_value=0.1, max_value=2.5, noise_std=0.01),
             "gaussian_blur": GaussianBlurNoiseCfg(kernel_size=3, sigma=1),
+            # toAdd Disparity Artifact Synthesis
             "depth_normalization": DepthNormalizationCfg(
                 depth_range=(0.0, 2.5),
                 normalize=True,
                 output_range=(0.0, 1.0),
             ),
+            # OOD perturbation
         },
         data_histories={"distance_to_image_plane_noised": 37},
     )
@@ -889,9 +918,9 @@ class CommandsCfg:
             "perlin_rough": {"lin_vel_x": (0.45, 1.0), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
             "perlin_rough_stand": {"lin_vel_x": (0.0, 0.0), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (0.0, 0.0)},
             "square_gaps": {"lin_vel_x": (0.45, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
-            "pyramid_stairs": {"lin_vel_x": (0.45, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
-            "pyramid_stairs_small": {"lin_vel_x": (0.45, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
-            "pyramid_stairs_high": {"lin_vel_x": (0.45, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
+            "pyramid_stairs": {"lin_vel_x": (0.3, 0.6), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
+            "pyramid_stairs_small": {"lin_vel_x": (0.3, 0.6), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
+            "pyramid_stairs_high": {"lin_vel_x": (0.3, 0.6), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
             "pyramid_stairs_inv": {"lin_vel_x": (0.45, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
             "pyramid_stairs_inv_small": {"lin_vel_x": (0.45, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
             "pyramid_stairs_inv_high": {
@@ -982,6 +1011,7 @@ class G1Rewards:
     pelvis_orientation_l2 = RewTerm(
         func=mdp.link_orientation, weight=-3.0, params={"asset_cfg": SceneEntityCfg("robot", body_names="pelvis")}
     )
+    # 惩罚触地时脚底不水平
     feet_flat_ori = RewTerm(
         func=mdp.feet_orientation_contact,
         weight=-0.4,
@@ -999,6 +1029,19 @@ class G1Rewards:
             "right_height_scanner_cfg": SceneEntityCfg("right_height_scanner"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_roll_link"),
             "height_offset": 0.035,
+        },
+    )
+    feet_contact_area = RewTerm(
+        func=mdp.feet_contact_area,
+        weight=1.0,
+        params={
+            "contact_sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_ankle_roll_link"),
+            "left_area_scanner_cfg": SceneEntityCfg("left_foot_area_scanner"),
+            "right_area_scanner_cfg": SceneEntityCfg("right_foot_area_scanner"),
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*_ankle_roll_link"),
+            "sole_offset": 0.035,
+            "height_tolerance": 0.01,
+            "min_ratio": 0.8,
         },
     )
     feet_close_xy = RewTerm(
@@ -1126,6 +1169,23 @@ class EventCfg:
         mode="startup",
         params={
             "sensor_cfgs": SceneEntityCfg("leg_volume_points"),
+        },
+    )
+
+    randomize_camera_offset = EventTerm(
+        func=instinct_mdp.randomize_camera_offsets,
+        mode="reset",
+        params={
+            "asset_cfg": SceneEntityCfg("camera"),
+            "offset_pose_ranges": {
+                "x": (-0.01, 0.01),
+                "y": (-0.01, 0.01),
+                "z": (-0.01, 0.01),
+                "roll": (-0.05, 0.05),
+                "pitch": (-0.05, 0.05),
+                "yaw": (-0.05, 0.05),
+            },
+            "distribution": "uniform",
         },
     )
 

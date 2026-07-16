@@ -122,7 +122,7 @@ class G1ParkourRoughEnvCfg_PLAY(G1ParkourRoughEnvCfg):
             "pyramid_stairs_inv": {"lin_vel_x": (0.45, 0.8), "lin_vel_y": (0.0, 0.0), "ang_vel_z": (-1.0, 1.0)},
         }
 
-        self.scene.leg_volume_points.debug_vis = False
+        self.scene.leg_volume_points.debug_vis = True
         self.commands.base_velocity.debug_vis = True
         self.events.physics_material = None
         self.events.reset_robot_joints.params = {

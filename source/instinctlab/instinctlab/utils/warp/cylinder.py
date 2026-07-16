@@ -6,6 +6,9 @@ import warp as wp
 
 from .kernels import points_penetrate_cylinder_kernel
 
+CLIP_MODE_FULL = 0
+CLIP_MODE_OUTSIDE_HALF = 1
+
 
 class CylinderSpatialGrid:
     """This is a class handling cylinders and sort them into a spatial grids.
@@ -17,6 +20,8 @@ class CylinderSpatialGrid:
         cylinders: torch.Tensor | np.ndarray,
         num_grid_cells: int = 64**3,
         device: str | torch.device = "cuda",
+        clip_modes: torch.Tensor | np.ndarray | None = None,
+        cut_normals: torch.Tensor | np.ndarray | None = None,
     ):
         """
         ## Args:
@@ -33,6 +38,19 @@ class CylinderSpatialGrid:
         self.device = device
 
         self.num_cylinders = self.cylinders_np.shape[0]
+        if clip_modes is None:
+            self.clip_modes_np = np.full(self.num_cylinders, CLIP_MODE_FULL, dtype=np.int32)
+        else:
+            self.clip_modes_np = clip_modes if isinstance(clip_modes, np.ndarray) else clip_modes.cpu().numpy()
+            self.clip_modes_np = self.clip_modes_np.astype(np.int32, copy=False)
+            assert self.clip_modes_np.shape == (self.num_cylinders,), "clip_modes should be of shape (M,)."
+
+        if cut_normals is None:
+            self.cut_normals_np = np.zeros((self.num_cylinders, 3), dtype=np.float32)
+        else:
+            self.cut_normals_np = cut_normals if isinstance(cut_normals, np.ndarray) else cut_normals.cpu().numpy()
+            self.cut_normals_np = self.cut_normals_np.astype(np.float32, copy=False)
+            assert self.cut_normals_np.shape == (self.num_cylinders, 3), "cut_normals should be of shape (M, 3)."
 
         self._compute_bounding_box()
         self._create_grid()
@@ -94,17 +112,6 @@ class CylinderSpatialGrid:
                             continue
                         grid[flat_grid_idx].append(idx)
 
-        # Convert the grid to a sorted list of indices as in CSR format.
-        # `grid` is a dict of lists (with variable length),
-        # we need to convert it into a fixed-size array for fast GPU lookups from grid index to cylinder index.
-        # For example `cell_indices` is a flat list of all cylinder indices in each grid cell,
-        # `cell_indices` is an array of cylinder indices [1,4,5,3,2,5,1,9,7,6,8, ...]
-        # `cell_offsets` is an array of offsets for each grid cell, e.g., [0, 3, 5, 7, 11, ...]
-        # Then in
-        #   cell 0, we have cylinders with indices [1, 4, 5]
-        #   cell 1, we have cylinders with indices [3, 2]
-        #   cell 2, we have cylinders with indices [5, 1]
-        #   cell 3, we have cylinders with indices [9, 7, 6, 8]
         self.cell_offsets = np.zeros(self.total_num_cells + 1, dtype=np.int32)
         self.cell_indices = []
         for i in range(self.total_num_cells):
@@ -121,6 +128,8 @@ class CylinderSpatialGrid:
         self.cylinder_start_wp = wp.array(self.cylinders_np[:, :3], dtype=wp.vec3, device=str(self.device))
         self.cylinder_end_wp = wp.array(self.cylinders_np[:, 3:6], dtype=wp.vec3, device=str(self.device))
         self.cylinder_thickness_wp = wp.array(self.cylinders_np[:, 6], dtype=wp.float32, device=str(self.device))
+        self.cylinder_clip_mode_wp = wp.array(self.clip_modes_np, dtype=wp.int32, device=str(self.device))
+        self.cylinder_cut_normal_wp = wp.array(self.cut_normals_np, dtype=wp.vec3, device=str(self.device))
 
     def get_points_penetration_offset(self, points: torch.Tensor) -> torch.Tensor:
         """Compute the penetration depth of points into cylinders in the grid.
@@ -145,6 +154,8 @@ class CylinderSpatialGrid:
                 self.cylinder_start_wp,
                 self.cylinder_end_wp,
                 self.cylinder_thickness_wp,
+                self.cylinder_clip_mode_wp,
+                self.cylinder_cut_normal_wp,
                 self.cell_offsets_wp,
                 self.cell_indices_wp,
                 self.grid_res_wp,

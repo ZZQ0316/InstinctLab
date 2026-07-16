@@ -19,9 +19,8 @@ python source/instinctlab/instinctlab/tasks/parkour/scripts/play.py \
 # 开启keyboard控制后，num_envs只能为1,且无法使用onnx导出模型
 
 # python source/instinctlab/instinctlab/tasks/parkour/scripts/play.py \
-#     --task=Instinct-Parkour-Stairs-Finetune-G1-v0 \
-#     --load_run=/home/tcict/zzq/Instinct/InstinctLab/logs/instinct_rl/stairs_finetune/20260424_201015_from20260410_222025 \
-#     --checkpoint model_45000.pt \
+#     --task=Instinct-Parkour-Target-Amp-G1-Play-v0 \
+#     --load_run=/home/tcict/zzq/Instinct/InstinctLab/logs/instinct_rl/g1_parkour/20260711_232413_from20260625_001711 \
+#     --checkpoint model_43500.pt \
 #     --num_envs=1 \
-#     --keyboard_control \
-#     --exportonnx
+#     --keyboard_control
